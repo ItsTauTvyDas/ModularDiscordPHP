@@ -1,0 +1,13 @@
+{
+    "name": "itstautvydas/modular-discord-php",
+    "description": "An extension for DiscordPHP",
+    "require": {
+        "team-reflex/discord-php": "^7.3"
+    },
+    "authors": [
+        {
+            "name": "Tautvydas",
+            "email": "tautvydas.gaming@gmail.com"
+        }
+    ]
+}
