@@ -9,7 +9,7 @@ use Seld\Signal\SignalHandler;
 class InteractableConsole
 {
     private static array $registry = [];
-    private readonly bool $loaded;
+    private static bool $loaded = false;
 
     public static function registerCommand(string $name, callable $function)
     {
@@ -18,7 +18,7 @@ class InteractableConsole
 
     public static function listenForCommands(ModularDiscord $modDiscord)
     {
-        if (isset(self::$loaded) and self::$loaded)
+        if (self::$loaded)
             return;
         self::$loaded = true;
         $discord = $modDiscord->discord;
@@ -37,7 +37,6 @@ class InteractableConsole
                     $args = [];
                     if (count($split) > 1)
                         $args = array_slice($split, 1);
-                    
                     $callable = self::$registry[$name];
                     if ($callable == null)
                         return self::handleDefaultCommand($modDiscord, $name, $args);
@@ -55,7 +54,7 @@ class InteractableConsole
     }
 
     /**
-     * Control + C handler.
+     * CTRL + C handler.
      */
     public static function handleSignals(ModularDiscord $modDiscord)
     {
@@ -64,7 +63,6 @@ class InteractableConsole
         $modDiscord->discord->getLoop()->addPeriodicTimer(0.1, function () use (&$signal, $modDiscord) {
             if ($signal->isTriggered()) {
                 $signal->reset();
-                echo PHP_EOL;
                 $modDiscord->close();
                 $signal->exitWithLastSignal();
             }
