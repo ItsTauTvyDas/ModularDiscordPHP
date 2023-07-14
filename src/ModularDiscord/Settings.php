@@ -24,10 +24,11 @@ class Settings
                 'accessors' => 'Accessors'
             ],
             'logger' => [
-                'time-zone' => date_default_timezone_get(),
+                'timezone' => date_default_timezone_get(),
                 'console-output' => 'php://stdout',
                 'date-format' => 'Y/m/d H:i:s',
-                'format' => '[%datetime%] %channel%.%level_name%: %message% %context% %extra%'
+                'format' => '[%datetime%] %channel%.%level_name%: %message% %context% %extra%',
+                'debug' => false
             ],
             'console' => [
                 'commands' => true,
@@ -75,6 +76,12 @@ class Settings
     public function consoleHandleCtrlC(bool $bool): self
     {
         $this->settings['console']['handle-ctrl-c'] = $bool;
+        return $this;
+    }
+
+    public function debug(bool $bool): self
+    {
+        $this->settings['console']['debug'] = $bool;
         return $this;
     }
 }
