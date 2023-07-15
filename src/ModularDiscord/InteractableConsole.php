@@ -10,6 +10,7 @@ class InteractableConsole
 {
     private static array $registry = [];
     private static bool $loaded = false;
+    private static mixed $stdin = null;
 
     public static function registerCommand(string $name, callable $function)
     {
@@ -26,12 +27,12 @@ class InteractableConsole
             return $discord->getLogger()->warning("Failed to initialize console command listener due to 'stream_set_blocking' function not being supported on Windows.");
 
         $discord->getLogger()->info('Listening for console commands...');
-        $stdin = fopen('php://stdin', 'r');
-        if (stream_set_blocking($stdin, false))
+        self::$stdin = fopen(STDIN, 'r');
+        if (stream_set_blocking(self::$stdin, false))
         {
-            $discord->getLoop()->addPeriodicTimer(1, function () use ($stdin, $modDiscord, $discord) {
+            $discord->getLoop()->addPeriodicTimer(1, function () use ($modDiscord, $discord) {
                 try {
-                    $line = fgets($stdin);
+                    $line = fgets(self::$stdin);
                     $split = explode(' ', $line);
                     $name = strtolower($split[0]);
                     $args = [];
@@ -53,6 +54,12 @@ class InteractableConsole
         $discord->getLogger()->error('stream_set_blocking(...) failed: console input handler not initialized.');
     }
 
+    public static function closeConsoleStream()
+    {
+        if (self::$stdin != null)
+            fclose(self::$stdin);
+    }
+
     /**
      * CTRL + C handler.
      */
@@ -63,8 +70,11 @@ class InteractableConsole
         $modDiscord->discord->getLoop()->addPeriodicTimer(0.1, function () use (&$signal, $modDiscord) {
             if ($signal->isTriggered()) {
                 $signal->reset();
-                $modDiscord->close();
-                $signal->exitWithLastSignal();
+                // If pressed second time, exit forcefully
+                if ($modDiscord->isClosing())
+                    $signal->exitWithLastSignal();
+                else
+                    $modDiscord->close();
             }
         });
     }
@@ -75,7 +85,6 @@ class InteractableConsole
             case 'stop':
             case 'close':
             case 'end':
-            case 'exit':
                 $modDiscord->close();
                 break;
             case 'forceexit':
