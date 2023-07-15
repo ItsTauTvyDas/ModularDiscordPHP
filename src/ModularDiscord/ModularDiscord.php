@@ -6,6 +6,8 @@ use DateTimeZone;
 use Discord\Discord;
 use Error;
 use Exception;
+use ModularDiscord\Base\Listener;
+use ModularDiscord\Base\Module;
 use Monolog\Formatter\LineFormatter;
 use Monolog\Handler\StreamHandler;
 use Monolog\Level;
@@ -19,6 +21,8 @@ class ModularDiscord
     public readonly LoggerInterface $globalLogger;
 
     private array $modules = [];
+
+    private bool $closing = false;
 
     /**
      * Makes a new instance of ModularDiscord
@@ -74,30 +78,66 @@ class ModularDiscord
     }
 
     /**
+     * Completely reloads a module.
+     * This basically gets module's code, renames the class then it evaluates code directly.
+     * Renaming class in PHP is impossible and you can't load a class that is already loaded.
+     * This was done just for easier testing.
+     * When adding to global modules array, original name is used and new name is used only when initializing the class.
+     * Be sure to restart bot later as this can accumulate some useless memory!
+     * @todo Replace class name in other module's files.
+     */
+    public function reloadModuleFile(string $name, &$newName = null): bool
+    {
+        $module = $this->modules[$name] ?? null;
+        if ($module == null)
+            return false;
+        $newName = $name.time();
+        $module->onDisable();
+        $moduleCode = file_get_contents($module->path);
+        $moduleCode = str_replace($name, $newName, $moduleCode);
+        if (str_starts_with($moduleCode, '<?php'))
+            $moduleCode = str_replace('<?php', '', $moduleCode);
+        else if (str_starts_with($moduleCode, '<?'))
+            $moduleCode = str_replace('<?', '', $moduleCode);
+        eval($moduleCode);
+        $this->loadModule($module->path, $newName, $name);
+        return true;
+    }
+
+    private function loadModule(string $path, string $name, string $displayName = null): ?Module
+    {
+        if ($displayName == null)
+            $displayName = $name;
+
+        try {
+            $instance = new $name($displayName, $path, $this);
+
+            $this->modules[$displayName] = $instance;
+            $instance->onEnable($displayName == null);
+            $instance->logger->info('Module loaded and enabled!');
+            return $instance;
+        } catch (Exception | Error $ex) {
+            $this->globalLogger->error("Failed to load $displayName module: " . $ex->getMessage(), [
+                'line' => $ex->getLine(),
+                'file' => $ex->getFile()
+            ]);
+            return null;
+        }
+    }
+
+    /**
      * Load modules.
      * @return self
      */
     public function loadModules(): self
     {
+        $this->globalLogger->info('Loading modules...');
         foreach (glob($this->settings['folders']['modules'] . '/*/module.php') as $moduleFile) {
             require_once $moduleFile;
             $name = pathinfo($moduleFile, PATHINFO_DIRNAME);
             $name = substr($name, strrpos($name, '/') + 1);
-            echo $name.PHP_EOL;
             if (class_exists($name)) {
-                try {
-                    $instance = new $name($name, $this);
-
-                    $this->modules[$name] = $instance;
-                    $this->executeGlobalModuleFunction('onEnable');
-
-                    $instance->logger->info("Module loaded and enabled!");
-                } catch (Exception | Error $ex) {
-                    $this->globalLogger->error("Failed to load $name module: " . $ex->getMessage(), [
-                        'line' => $ex->getLine(),
-                        'file' => $ex->getFile()
-                    ]);
-                }
+                $this->loadModule($moduleFile, $name);
                 continue;
             }
             $this->globalLogger->warning("Failed to load $moduleFile module: Class $moduleFile does not exist!", [
@@ -110,11 +150,11 @@ class ModularDiscord
     /**
      * Execute function for every module (if it exists).
      */
-    public function executeGlobalModuleFunction(string $function, ?mixed $param = null)
+    public function executeGlobalModuleFunction(string $function, array $params = [])
     {
         foreach (array_values($this->modules) as $module)
-            if (method_exists($module, $function))
-                $module->$function($param);
+            if (method_exists($module, $function) and $module->isEnabled())
+                $module->$function(...$params);
     }
 
     /**
@@ -122,10 +162,15 @@ class ModularDiscord
      */
     public function close()
     {
-        $this->executeGlobalModuleFunction('onDisable');
+        $this->closing = true;
         $this->executeGlobalModuleFunction('onClose');
         if (isset($this->discord))
             $this->discord->close();
+    }
+
+    public function isClosing(): bool
+    {
+        return $this->closing;
     }
 
     /**
@@ -134,20 +179,33 @@ class ModularDiscord
      * @param Discord $discord Discord reference.
      * @return self
      */
-    public function initiateDiscord(array $options, Discord &$discord = null): self
+    public function initiateDiscord(array $options, callable|null $callable = null): self
     {
-        $this->discord = ($discord = new Discord($options));
-        $this->executeGlobalModuleFunction('onDiscordInit', $discord);
+        $this->globalLogger->info('Initiating and starting up Discord engine...');
+        $this->discord = ($discord = new Discord(array_merge_recursive($options, ['logger' => $this->createLogger('DiscordPHP')])));
+        if ($callable != null)
+            $callable($discord);
+        $this->executeGlobalModuleFunction('onDiscordInit', [$discord]);
 
         $discord->on('ready', function (Discord $discord) {
-            $this->globalLogger->info('DONE! Client ready.');
-            $this->executeGlobalModuleFunction('onDiscordReady', $discord);
+            $this->executeGlobalModuleFunction('onDiscordReady', [$discord]);
         });
 
         if ($this->settings['console']['commands'])
             InteractableConsole::listenForCommands($this);
         if ($this->settings['console']['handle-ctrl-c'])
             InteractableConsole::handleSignals($this);
+
         return $this;
+    }
+
+    public function run()
+    {
+        $this->discord->run();
+        InteractableConsole::closeConsoleStream();
+        $this->executeGlobalModuleFunction('onDisable');
+        if (!$this->closing)
+            $this->executeGlobalModuleFunction('onClose', [true]);
+        $this->globalLogger->info('Fully closed!');
     }
 }
