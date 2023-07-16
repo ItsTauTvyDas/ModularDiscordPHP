@@ -34,9 +34,9 @@ class ModularDiscord
 
         if ($settings === null)
             $i->settings = (new Settings())->settings;
-        else if (is_callable($settings))
+        elseif (is_callable($settings))
             $i->settings = $settings(new Settings())->settings;
-        else if ($settings instanceof Settings)
+        elseif ($settings instanceof Settings)
             $i->settings = $settings->settings;
         else
             $i->settings = $settings;
@@ -91,13 +91,13 @@ class ModularDiscord
         $module = $this->modules[$name] ?? null;
         if ($module == null)
             return false;
-        $newName = $name.time();
-        $module->onDisable();
+        $newName = str_replace('.', '', $name.microtime(true));
+        $module->setEnabled(false);
         $moduleCode = file_get_contents($module->path);
-        $moduleCode = str_replace($name, $newName, $moduleCode);
+        $moduleCode = str_replace(" $name ", " $newName ", $moduleCode);
         if (str_starts_with($moduleCode, '<?php'))
             $moduleCode = str_replace('<?php', '', $moduleCode);
-        else if (str_starts_with($moduleCode, '<?'))
+        elseif (str_starts_with($moduleCode, '<?'))
             $moduleCode = str_replace('<?', '', $moduleCode);
         eval($moduleCode);
         $this->loadModule($module->path, $newName, $name);
@@ -106,15 +106,17 @@ class ModularDiscord
 
     private function loadModule(string $path, string $name, string $displayName = null): ?Module
     {
+        $firstLoad = $displayName == null;
         if ($displayName == null)
             $displayName = $name;
 
         try {
             $instance = new $name($displayName, $path, $this);
-
-            $this->modules[$displayName] = $instance;
-            $instance->onEnable($displayName == null);
+            $instance->onEnable(true);
             $instance->logger->info('Module loaded and enabled!');
+            if (isset($this->discord) and $instance->callReadyOnEnable)
+                $instance->onDiscordReady($this->discord);
+            $this->modules[$displayName] = $instance;
             return $instance;
         } catch (Exception | Error $ex) {
             $this->globalLogger->error("Failed to load $displayName module: " . $ex->getMessage(), [
@@ -163,6 +165,7 @@ class ModularDiscord
     public function close()
     {
         $this->closing = true;
+        $this->executeGlobalModuleFunction('onDisable');
         $this->executeGlobalModuleFunction('onClose');
         if (isset($this->discord))
             $this->discord->close();
