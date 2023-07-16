@@ -71,7 +71,7 @@ class InteractableConsole
             if ($signal->isTriggered()) {
                 $signal->reset();
                 // If pressed second time, exit forcefully
-                if ($modDiscord->isClosing())
+                if ($modDiscord->isBeingClosedByUser())
                     $signal->exitWithLastSignal();
                 else
                     $modDiscord->close();

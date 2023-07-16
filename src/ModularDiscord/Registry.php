@@ -2,7 +2,6 @@
 
 namespace ModularDiscord;
 
-use Discord\Discord;
 use ModularDiscord\Base\Command;
 use ModularDiscord\Base\Listener;
 use ModularDiscord\Base\Module;
@@ -35,7 +34,8 @@ final class Registry
                 if (is_string($event)) {
                     $this->modularDiscord->discord->on($event, $closure = $refMethod->getClosure($listener));
                     $listeners[$event] = $closure;
-                    $this->listeners[$event][] = $closure;
+                    if ($this->module->cacheListeners)
+                        $this->listeners[$event][] = $closure;
                     $count++;
                     continue;
                 }
@@ -47,19 +47,21 @@ final class Registry
         ]);
     }
 
+    /**
+     * Unregisters cached listeners if there's any.
+     * Note: This gets called when disabling module.
+     */
     public function removeDiscordListeners()
     {
         $count = 0;
         foreach ($this->listeners as $key => $value) {
             foreach ($value as $listener) {
                 $this->modularDiscord->discord->removeListener($key, $listener);
+                $count++;
             }
         }
         if ($count)
-            $this->module->logger->info("Unegistered $count listener" . ($count > 1 ? 's' : ''), [
-                'listeners' => array_keys($this->listeners),
-                'class' => get_class($listener)
-            ]);
+            $this->module->logger->info("Unegistered $count listener" . ($count > 1 ? 's' : ''), array_keys($this->listeners));
     }
 
     public function registerCommand(Command $command)

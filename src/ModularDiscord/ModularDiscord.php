@@ -6,12 +6,12 @@ use DateTimeZone;
 use Discord\Discord;
 use Error;
 use Exception;
-use ModularDiscord\Base\Listener;
 use ModularDiscord\Base\Module;
 use Monolog\Formatter\LineFormatter;
 use Monolog\Handler\StreamHandler;
 use Monolog\Level;
 use Monolog\Logger;
+use ParseError;
 use Psr\Log\LoggerInterface;
 
 class ModularDiscord
@@ -69,6 +69,8 @@ class ModularDiscord
 
     /**
      * Load accessors.
+     * So called "accessors" are the type of module that can be accessed by every module.
+     * Useful if you have some kind of API with one instance that you need to access in multiple modules.
      * @return self
      */
     public function loadAccessors(): self
@@ -86,9 +88,9 @@ class ModularDiscord
      * Be sure to restart bot later as this can accumulate some useless memory!
      * @todo Replace class name in other module's files.
      */
-    public function reloadModuleFile(string $name, &$newName = null): bool
+    public function refreshModuleFile(string $name, &$newName = null): bool
     {
-        $module = $this->modules[$name] ?? null;
+        $module = @$this->modules[$name] ?? null;
         if ($module == null)
             return false;
         $newName = str_replace('.', '', $name.microtime(true));
@@ -99,9 +101,27 @@ class ModularDiscord
             $moduleCode = str_replace('<?php', '', $moduleCode);
         elseif (str_starts_with($moduleCode, '<?'))
             $moduleCode = str_replace('<?', '', $moduleCode);
-        eval($moduleCode);
-        $this->loadModule($module->path, $newName, $name);
-        return true;
+        try {
+            eval($moduleCode);
+            $this->loadModule($module->path, $newName, $name);
+            return true;
+        } catch (Exception | Error | ParseError $ex) {
+            $module->logger->error("Fatal error: Caught ".get_class($ex).": Failed to refresh and reload $name module: " . $ex->getMessage());
+            $module->logger->error($ex->getTraceAsString());
+            return false;
+        }
+    }
+
+    /**
+     * Reload a module (disable and enable again).
+     */
+    public function reloadModule(string $name)
+    {
+        $module = $this->modules[$name] ?? null;
+        if ($module != null) {
+            $module->setEnabled(false);
+            $module->setEnabled(true);
+        }
     }
 
     private function loadModule(string $path, string $name, string $displayName = null): ?Module
@@ -165,13 +185,14 @@ class ModularDiscord
     public function close()
     {
         $this->closing = true;
-        $this->executeGlobalModuleFunction('onDisable');
-        $this->executeGlobalModuleFunction('onClose');
         if (isset($this->discord))
             $this->discord->close();
     }
 
-    public function isClosing(): bool
+    /**
+     * Check if the bot is being closed (not forcefully)
+     */
+    public function isBeingClosedByUser(): bool
     {
         return $this->closing;
     }
@@ -202,13 +223,16 @@ class ModularDiscord
         return $this;
     }
 
+    /**
+     * Run discord loop.
+     * Any code after this function may not get executed.
+     */
     public function run()
     {
         $this->discord->run();
         InteractableConsole::closeConsoleStream();
         $this->executeGlobalModuleFunction('onDisable');
-        if (!$this->closing)
-            $this->executeGlobalModuleFunction('onClose', [true]);
+        $this->executeGlobalModuleFunction('onClose');
         $this->globalLogger->info('Fully closed!');
     }
 }
