@@ -16,7 +16,7 @@ class Cache
         $this->source = $this->readFile();
     }
 
-    public function cache(?string $category, string $key, $value)
+    public function cache(?string $category, string $key, $value, bool $removeFromArray = false)
     {
         $array = &$this->source;
         if ($category != null) {
@@ -25,18 +25,25 @@ class Cache
             $array = &$this->source[$category];
         }
 
-        if ($value == null) {
-            unset($array[$key]);
-            if ($category != null and !count($array))
-                unset($this->source[$category]);
+        if ($removeFromArray) {
+            $array[$key] = array_values(array_diff($array[$key], $value));
         } else {
-            if (is_array($value)) {
-                if (!isset($array[$key]) or !is_array($array[$key]))
-                    $array[$key] = [];
-                array_push($array[$key], ...$value);
-            } else
-                $array[$key] = $value;
+            if ($value == null) {
+                unset($array[$key]);
+            } else {
+                if (is_array($value)) {
+                    if (!isset($array[$key]) or !is_array($array[$key]))
+                        $array[$key] = [];
+                    $value = array_filter($value, fn ($v) => !in_array($v, $array[$key]));
+                    if (count($value) == 0)
+                        return;
+                    foreach ($value as $v)
+                        array_push($array[$key], $v);
+                } else
+                    $array[$key] = $value;
+            }
         }
+        
         $this->saveToFile($this->source);
     }
 
