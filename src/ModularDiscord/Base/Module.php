@@ -40,6 +40,9 @@ class Module
     public function onDiscordInit(Discord $discord) {}
     public function onDiscordReady(Discord $discord) {}
 
+    /**
+     * Executed once on first load.
+     */
     public function loadLocalFiles() {}
 
     public final function isFirstTimeLoad(): bool
