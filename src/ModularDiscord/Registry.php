@@ -2,7 +2,9 @@
 
 namespace ModularDiscord;
 
-use ModularDiscord\Base\Command;
+use Discord\Parts\Interactions\Command\Command;
+use Discord\Parts\Interactions\Interaction;
+use ModularDiscord\Base\AbstractCommand;
 use ModularDiscord\Base\Listener;
 use ModularDiscord\Base\Module;
 use ReflectionClass;
@@ -14,9 +16,9 @@ final class Registry
     private readonly Module $module;
     private array $listeners = [];
 
-    public function __construct(ModularDiscord $modularDiscord, Module $module)
+    public function __construct(Module $module)
     {
-        $this->modularDiscord = $modularDiscord;
+        $this->modularDiscord = $module->modularDiscord;
         $this->module = $module;
     }
 
@@ -64,9 +66,46 @@ final class Registry
             $this->module->logger->info("Unegistered $count listener" . ($count > 1 ? 's' : ''), array_keys($this->listeners));
     }
 
-    public function registerCommand(Command $command)
+    public function isCommandCached(string $name): bool
     {
+        return in_array($name, $this->modularDiscord->cache->getCached(null, Cache::COMMANDS, []));
+    }
 
+    public function registerCommand(AbstractCommand $command, bool $cacheCommand = true, ?string $name = null, ?string $description = null, ?string $saveReason = null)
+    {
+        $builder = $command->onCreate();
+        if ($name != null and !isset($builder->name))
+            $builder->setName($name);
+        if ($description != null and !isset($builder->description))
+            $builder->setDescription($description);
+
+        $name = $builder->name;
+        $description = $builder->description ?? null;
+
+        $discord = $this->modularDiscord->discord;
+        $discordCommand = new Command($discord, $builder->toArray());
+
+        $guild = null;
+        if ($saved = (!$cacheCommand or !$this->isCommandCached($name)))
+            (($guild = $command->getGuild()) != null ? $discord->guilds[$guild] : $discord->application)->commands->save($discordCommand, $saveReason);
+        if ($cacheCommand and $saved)
+            $this->modularDiscord->cache->cache(null, Cache::COMMANDS, [$name]);
+
+        $discord->listenCommand(
+            $name,
+            fn (Interaction $i) => $command->onCommand($i, $i->data->options),
+            fn (Interaction $i) => $command->onAutoComplete($i, $i->data->options)
+        );
+
+        $this->module->logger->info("Command $name successfully registered!", array_filter([
+            'class' => get_class($command),
+            'description' => $description,
+            'reason' => $saveReason,
+            'cached' => $cacheCommand,
+            'guild' => $guild ?? null,
+            'global' => $guild == null,
+            'saved' => $saved
+        ], fn ($v) => !is_null($v)));
     }
 
     public function getListeners(): array
