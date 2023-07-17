@@ -6,6 +6,7 @@ use DateTimeZone;
 use Discord\Discord;
 use Error;
 use Exception;
+use ModularDiscord\Base\Accessor;
 use ModularDiscord\Base\Module;
 use Monolog\Formatter\LineFormatter;
 use Monolog\Handler\StreamHandler;
@@ -13,6 +14,7 @@ use Monolog\Level;
 use Monolog\Logger;
 use ParseError;
 use Psr\Log\LoggerInterface;
+use Throwable;
 
 class ModularDiscord
 {
@@ -22,6 +24,7 @@ class ModularDiscord
     public readonly Cache $cache;
 
     private array $modules = [];
+    private array $accessors = [];
 
     private bool $closing = false;
 
@@ -62,7 +65,7 @@ class ModularDiscord
 
     /**
      * Get loaded modules.
-     * @return array<string, void> modules.
+     * @return array<string, Module> modules.
      */
     public function getModules(): array
     {
@@ -70,14 +73,52 @@ class ModularDiscord
     }
 
     /**
+     * Get loaded modules.
+     * @return array<string, Accessor> modules.
+     */
+    public function getAccessors(): array
+    {
+        return $this->accessors;
+    }
+
+    public function accessor(string $name): ?Accessor
+    {
+        return $this->accessors[$name] ?? null;
+    }
+
+    private function handleException(Throwable $throwable, string $message, ?LoggerInterface $logger = null)
+    {
+        $logger = $logger ?? $this->logger;
+        $this->logger->error('Caught ' . get_class($throwable) . ": $message: " . $throwable->getMessage());
+        $this->logger->error($throwable->getTraceAsString());
+    }
+
+    /**
      * Load accessors.
-     * So called "accessors" are the type of module that can be accessed by every module.
+     * So called "accessors" are instances that can be accessed by every module.
      * Useful if you have some kind of API with one instance that you need to access in multiple modules.
      * @return self
      */
     public function loadAccessors(): self
     {
-        // TODO
+        foreach (glob($this->settings['folders']['accessors'] . '/*') as $file) {
+            $accessorFile = $file;
+            if (is_dir($file)) {
+                $name = basename($file);
+                $accessorFile = $file . '/accessor.php';
+            } else
+                $name = pathinfo($file, PATHINFO_FILENAME);
+            try {
+                require $accessorFile;
+                $instance = new $name($this, $name);
+                $this->accessors[$name] = $instance;
+                $instance->load();
+                $instance->logger->info('Accessor loaded!');
+                $this->executeGlobalModuleFunction('onAccessorReady', [$instance]);
+            } catch (Exception $ex) {
+                $this->handleException($ex, "Failed to load $name accessor");
+            }
+        }
         return $this;
     }
 
@@ -92,7 +133,7 @@ class ModularDiscord
      */
     public function refreshModuleFile(string $name, &$newName = null): bool
     {
-        $module = @$this->modules[$name] ?? null;
+        $module = $this->modules[$name] ?? null;
         if ($module == null)
             return false;
         $newName = str_replace('.', '', $name.microtime(true));
@@ -108,8 +149,7 @@ class ModularDiscord
             $this->loadModule($module->path, $newName, $name, $module->registry);
             return true;
         } catch (Exception | Error | ParseError $ex) {
-            $module->logger->error("Fatal error: Caught ".get_class($ex).": Failed to refresh and reload $name module: " . $ex->getMessage());
-            $module->logger->error($ex->getTraceAsString());
+            $this->handleException($ex, "Failed to refresh and reload $name module");
             return false;
         }
     }
@@ -136,18 +176,17 @@ class ModularDiscord
             $instance = new $name($displayName, $path, $this);
             if ($firstLoad)
                 $instance->loadLocalFiles();
-            if ($registry != null) {
+            if ($registry != null)
                 $instance->registry->registeredCommands = $registry->registeredCommands;
-            }
             $instance->onEnable(true);
             $instance->logger->info('Module loaded and enabled!');
             if (isset($this->discord) and $instance->callReadyOnEnable)
                 $instance->onDiscordReady($this->discord);
+            $this->executeGlobalAccessorFunction('onModuleReady', [$instance]);
             $this->modules[$displayName] = $instance;
             return $instance;
-        } catch (Exception | Error $ex) {
-            $this->logger->error("Failed to load $displayName module: " . $ex->getMessage());
-            $this->logger->error($ex->getTraceAsString());
+        } catch (Exception $ex) {
+            $this->handleException($ex, "Failed to load $displayName module");
             return null;
         }
     }
@@ -175,13 +214,23 @@ class ModularDiscord
     }
 
     /**
-     * Execute function for every module (if it exists).
+     * Executes function for every module (if it exists).
      */
     public function executeGlobalModuleFunction(string $function, array $params = [])
     {
         foreach (array_values($this->modules) as $module)
             if (method_exists($module, $function) and $module->isEnabled())
                 $module->$function(...$params);
+    }
+
+    /**
+     * Executes function for every accessor (if it exists).
+     */
+    public function executeGlobalAccessorFunction(string $function, array $params = [])
+    {
+        foreach (array_values($this->accessors) as $accessor)
+            if (method_exists($accessor, $function))
+                $accessor->$function(...$params);
     }
 
     /**
@@ -195,7 +244,7 @@ class ModularDiscord
     }
 
     /**
-     * Check if the bot is being closed (not forcefully)
+     * Check if the bot is being closed by the user.
      */
     public function isBeingClosedByUser(): bool
     {
@@ -218,6 +267,7 @@ class ModularDiscord
 
         $discord->on('ready', function (Discord $discord) {
             $this->executeGlobalModuleFunction('onDiscordReady', [$discord]);
+            $this->executeGlobalAccessorFunction('onDiscordReady', [$discord]);
         });
 
         if ($this->settings['console']['commands'])
@@ -238,6 +288,7 @@ class ModularDiscord
         InteractableConsole::closeConsoleStream();
         $this->executeGlobalModuleFunction('onDisable');
         $this->executeGlobalModuleFunction('onClose');
+        $this->executeGlobalAccessorFunction('close');
         $this->logger->info('Fully closed!');
     }
 }

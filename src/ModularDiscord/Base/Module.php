@@ -3,6 +3,7 @@
 namespace ModularDiscord\Base;
 
 use Discord\Discord;
+use ModularDiscord\Base\Accessor;
 use ModularDiscord\ModularDiscord;
 use ModularDiscord\Registry;
 use Psr\Log\LoggerInterface;
@@ -37,6 +38,7 @@ class Module
     public function onEnable() {}
     public function onDisable() {}
     public function onClose() {}
+    public function onAccessorReady(Accessor $accessor) {}
     public function onDiscordInit(Discord $discord) {}
     public function onDiscordReady(Discord $discord) {}
 
