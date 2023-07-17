@@ -1,6 +1,8 @@
 {
     "name": "itstautvydas/modular-discord-php",
     "description": "An extension for DiscordPHP",
+    "keywords": ["module", "modular", "discord", "discordphp"],
+    "license": "MIT",
     "require": {
         "team-reflex/discord-php": "^7.3",
         "seld/signal-handler": "^2.0"
