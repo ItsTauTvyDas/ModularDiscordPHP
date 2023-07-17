@@ -19,6 +19,7 @@ class ModularDiscord
     public readonly array $settings;
     public readonly Discord $discord;
     public readonly LoggerInterface $globalLogger;
+    public readonly Cache $cache;
 
     private array $modules = [];
 
@@ -44,6 +45,7 @@ class ModularDiscord
         foreach (array_values($i->settings['folders']) as $folder)
             @mkdir($folder);
         $i->globalLogger = $i->createLogger('ModularDiscord');
+        $i->cache = new Cache($i->settings['cache']['filename']);
         return $i;
     }
 
@@ -80,13 +82,13 @@ class ModularDiscord
     }
 
     /**
-     * Completely reloads a module.
+     * Forcefully loads already loaded module with modified contents.
      * This basically gets module's code, renames the class then it evaluates code directly.
      * Renaming class in PHP is impossible and you can't load a class that is already loaded.
      * This was done just for easier testing.
      * When adding to global modules array, original name is used and new name is used only when initializing the class.
      * Be sure to restart bot later as this can accumulate some useless memory!
-     * @todo Replace class name in other module's files.
+     * Note: This does not 'reload' other module's files.
      */
     public function refreshModuleFile(string $name, &$newName = null): bool
     {
@@ -132,6 +134,8 @@ class ModularDiscord
 
         try {
             $instance = new $name($displayName, $path, $this);
+            if ($firstLoad)
+                $instance->loadLocalFiles();
             $instance->onEnable(true);
             $instance->logger->info('Module loaded and enabled!');
             if (isset($this->discord) and $instance->callReadyOnEnable)

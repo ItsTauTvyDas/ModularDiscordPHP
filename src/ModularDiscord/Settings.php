@@ -33,6 +33,9 @@ class Settings
             'console' => [
                 'commands' => true,
                 'handle-ctrl-c' => true
+            ],
+            'cache' => [
+                'filename' => 'cache.json'
             ]
         ];
     }
