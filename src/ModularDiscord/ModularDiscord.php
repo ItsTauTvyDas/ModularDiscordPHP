@@ -18,7 +18,7 @@ class ModularDiscord
 {
     public readonly array $settings;
     public readonly Discord $discord;
-    public readonly LoggerInterface $globalLogger;
+    public readonly LoggerInterface $logger;
     public readonly Cache $cache;
 
     private array $modules = [];
@@ -44,7 +44,7 @@ class ModularDiscord
 
         foreach (array_values($i->settings['folders']) as $folder)
             @mkdir($folder);
-        $i->globalLogger = $i->createLogger('ModularDiscord');
+        $i->logger = $i->createLogger('ModularDiscord');
         $i->cache = new Cache($i->settings['cache']['filename']);
         return $i;
     }
@@ -105,7 +105,7 @@ class ModularDiscord
             $moduleCode = str_replace('<?', '', $moduleCode);
         try {
             eval($moduleCode);
-            $this->loadModule($module->path, $newName, $name);
+            $this->loadModule($module->path, $newName, $name, $module->registry);
             return true;
         } catch (Exception | Error | ParseError $ex) {
             $module->logger->error("Fatal error: Caught ".get_class($ex).": Failed to refresh and reload $name module: " . $ex->getMessage());
@@ -126,7 +126,7 @@ class ModularDiscord
         }
     }
 
-    private function loadModule(string $path, string $name, string $displayName = null): ?Module
+    private function loadModule(string $path, string $name, string $displayName = null, ?Registry $registry = null): ?Module
     {
         $firstLoad = $displayName == null;
         if ($displayName == null)
@@ -136,6 +136,9 @@ class ModularDiscord
             $instance = new $name($displayName, $path, $this);
             if ($firstLoad)
                 $instance->loadLocalFiles();
+            if ($registry != null) {
+                $instance->registry->registeredCommands = $registry->registeredCommands;
+            }
             $instance->onEnable(true);
             $instance->logger->info('Module loaded and enabled!');
             if (isset($this->discord) and $instance->callReadyOnEnable)
@@ -143,10 +146,8 @@ class ModularDiscord
             $this->modules[$displayName] = $instance;
             return $instance;
         } catch (Exception | Error $ex) {
-            $this->globalLogger->error("Failed to load $displayName module: " . $ex->getMessage(), [
-                'line' => $ex->getLine(),
-                'file' => $ex->getFile()
-            ]);
+            $this->logger->error("Failed to load $displayName module: " . $ex->getMessage());
+            $this->logger->error($ex->getTraceAsString());
             return null;
         }
     }
@@ -157,7 +158,7 @@ class ModularDiscord
      */
     public function loadModules(): self
     {
-        $this->globalLogger->info('Loading modules...');
+        $this->logger->info('Loading modules...');
         foreach (glob($this->settings['folders']['modules'] . '/*/module.php') as $moduleFile) {
             require_once $moduleFile;
             $name = pathinfo($moduleFile, PATHINFO_DIRNAME);
@@ -166,7 +167,7 @@ class ModularDiscord
                 $this->loadModule($moduleFile, $name);
                 continue;
             }
-            $this->globalLogger->warning("Failed to load $moduleFile module: Class $moduleFile does not exist!", [
+            $this->logger->warning("Failed to load $moduleFile module: Class $moduleFile does not exist!", [
                 'file' => $moduleFile
             ]);
         }
@@ -209,7 +210,7 @@ class ModularDiscord
      */
     public function initiateDiscord(array $options, callable|null $callable = null): self
     {
-        $this->globalLogger->info('Initiating and starting up Discord engine...');
+        $this->logger->info('Initiating and starting up Discord engine...');
         $this->discord = ($discord = new Discord(array_merge_recursive($options, ['logger' => $this->createLogger('DiscordPHP')])));
         if ($callable != null)
             $callable($discord);
@@ -237,6 +238,6 @@ class ModularDiscord
         InteractableConsole::closeConsoleStream();
         $this->executeGlobalModuleFunction('onDisable');
         $this->executeGlobalModuleFunction('onClose');
-        $this->globalLogger->info('Fully closed!');
+        $this->logger->info('Fully closed!');
     }
 }
