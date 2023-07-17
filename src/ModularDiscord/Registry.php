@@ -22,7 +22,7 @@ final class Registry
      */
     public array $listeners = [];
     /**
-     * @var array<string, array<string>> $registeredCommands
+     * @var array<string, array<string, string>> $registeredCommands
      */
     public array $registeredCommands = [];
 
@@ -78,7 +78,7 @@ final class Registry
 
     public function isCommandCached(string $name): bool
     {
-        return in_array($name, $this->modularDiscord->cache->getCached(null, Cache::COMMANDS, []));
+        return $this->modularDiscord->cache->isCached(Cache::COMMANDS, $name);
     }
 
     public function registerCommand(AbstractCommand $command, ?string $name = null, ?string $description = null, ?string $guild = null, bool $cacheCommand = true, ?string $saveReason = null): ?RegisteredCommand
@@ -103,17 +103,20 @@ final class Registry
 
         $commands = ($guild != null ? $discord->guilds[$guild] : $discord->application)->commands;
         
-        if ($saved = (!$cacheCommand or !$this->isCommandCached($name)))
-            $commands->save($discordCommand, $saveReason);
-        if ($cacheCommand and $saved)
-            $this->modularDiscord->cache->cache(null, Cache::COMMANDS, [$name]);
+        $key = $guild ?? 'global';
+        if (!isset($this->registeredCommands[$key]))
+            $this->registeredCommands[$key] = [];
+        $commandRegistry = &$this->registeredCommands[$key];
 
-        if (!isset($this->registeredCommands[$guild ?? 'global']))
-            $this->registeredCommands[$guild ?? 'global'] = [];
-        $commandRegistry = &$this->registeredCommands[$guild ?? 'global'];
+        if ($saved = (!$cacheCommand or !$this->isCommandCached($name))) {
+            $commands->save($discordCommand, $saveReason)->done(function (Command $cmd) use ($name, $cacheCommand, &$commandRegistry) {
+                if ($cacheCommand)
+                    $this->modularDiscord->cache->cache(Cache::COMMANDS, $name, $cmd->id);
+                $commandRegistry[$name] = $cmd->id;
+            });
+        }
+
         if (!in_array($name, $commandRegistry)) {
-            $commandRegistry[] = $name;
-
             $registered = $discord->listenCommand(
                 $name,
                 fn (Interaction $i) => $command->onCommand($i, $i->data->options),
@@ -136,24 +139,23 @@ final class Registry
 
     public function unregisterAllCommands()
     {
-        foreach ($this->registeredCommands as $guild => $commandNames) {
+        foreach ($this->registeredCommands as $guild => $commands) {
             $guild != 'global' or $guild = null;
-            foreach ($commandNames as $name)
-                self::unregisterCommand($this->modularDiscord, $name, $guild, logger: $this->module->logger);
+            foreach ($commands as $name => $id)
+                self::unregisterCommand($this->modularDiscord, $name, $id, $guild, logger: $this->module->logger);
         }
     }
 
-    public static function unregisterCommand(ModularDiscord $modularDiscord, string $name, ?string $guild = null, ?string $reason = null, LoggerInterface $logger = null)
+    public static function unregisterCommand(ModularDiscord $modularDiscord, string $name, string $id, ?string $guild = null, ?string $reason = null, LoggerInterface $logger = null)
     {
         $discord = $modularDiscord->discord;
         $commands = ($guild != null ? $discord->guilds[$guild] : $discord->application)->commands;
         $logger = ($logger ?? $modularDiscord->logger);
-        // TODO find a way to get command by name
-        $commands->delete($name, $reason)->done(fn () => $logger->info("Unregistered $name command successfully", array_filter([
+        $commands->delete($id, $reason)->done(fn () => $logger->info("Unregistered $name command successfully", array_filter([
             'guild' => $guild,
             'global' => $guild == null,
             'reason' => $reason
         ], fn ($v) => !is_null($v))));
-        $modularDiscord->cache->cache(null, Cache::COMMANDS, [$name], true);
+        $modularDiscord->cache->cache(Cache::COMMANDS, $name, null);
     }
 }
