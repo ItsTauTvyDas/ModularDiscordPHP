@@ -2,11 +2,14 @@
 
 namespace ModularDiscord;
 
+use Closure;
+use Discord\Helpers\RegisteredCommand;
 use Discord\Parts\Interactions\Command\Command;
 use Discord\Parts\Interactions\Interaction;
 use ModularDiscord\Base\AbstractCommand;
 use ModularDiscord\Base\Listener;
 use ModularDiscord\Base\Module;
+use Psr\Log\LoggerInterface;
 use ReflectionClass;
 use ReflectionMethod;
 
@@ -14,7 +17,14 @@ final class Registry
 {
     private readonly ModularDiscord $modularDiscord;
     private readonly Module $module;
-    private array $listeners = [];
+    /**
+     * @var array<string, array<Closure>> $listeners
+     */
+    public array $listeners = [];
+    /**
+     * @var array<string, array<string>> $registeredCommands
+     */
+    public array $registeredCommands = [];
 
     public function __construct(Module $module)
     {
@@ -71,7 +81,7 @@ final class Registry
         return in_array($name, $this->modularDiscord->cache->getCached(null, Cache::COMMANDS, []));
     }
 
-    public function registerCommand(AbstractCommand $command, bool $cacheCommand = true, ?string $name = null, ?string $description = null, ?string $saveReason = null)
+    public function registerCommand(AbstractCommand $command, ?string $name = null, ?string $description = null, ?string $guild = null, bool $cacheCommand = true, ?string $saveReason = null): ?RegisteredCommand
     {
         $builder = $command->onCreate();
         if ($name != null and !isset($builder->name))
@@ -84,32 +94,66 @@ final class Registry
 
         $discord = $this->modularDiscord->discord;
         $discordCommand = new Command($discord, $builder->toArray());
+        $guild = $guild ?? $command->getGuild();
 
-        $guild = null;
+        if ($guild != null and !$discord->guilds->has($guild)) {
+            $this->module->logger->error("Couldn't register '$name' command. Guild $guild does not exist!");
+            return null;
+        }
+
+        $commands = ($guild != null ? $discord->guilds[$guild] : $discord->application)->commands;
+        
         if ($saved = (!$cacheCommand or !$this->isCommandCached($name)))
-            (($guild = $command->getGuild()) != null ? $discord->guilds[$guild] : $discord->application)->commands->save($discordCommand, $saveReason);
+            $commands->save($discordCommand, $saveReason);
         if ($cacheCommand and $saved)
             $this->modularDiscord->cache->cache(null, Cache::COMMANDS, [$name]);
 
-        $discord->listenCommand(
-            $name,
-            fn (Interaction $i) => $command->onCommand($i, $i->data->options),
-            fn (Interaction $i) => $command->onAutoComplete($i, $i->data->options)
-        );
+        if (!isset($this->registeredCommands[$guild ?? 'global']))
+            $this->registeredCommands[$guild ?? 'global'] = [];
+        $commandRegistry = &$this->registeredCommands[$guild ?? 'global'];
+        if (!in_array($name, $commandRegistry)) {
+            $commandRegistry[] = $name;
 
-        $this->module->logger->info("Command $name successfully registered!", array_filter([
-            'class' => get_class($command),
-            'description' => $description,
-            'reason' => $saveReason,
-            'cached' => $cacheCommand,
-            'guild' => $guild ?? null,
-            'global' => $guild == null,
-            'saved' => $saved
-        ], fn ($v) => !is_null($v)));
+            $registered = $discord->listenCommand(
+                $name,
+                fn (Interaction $i) => $command->onCommand($i, $i->data->options),
+                fn (Interaction $i) => $command->onAutoComplete($i, $i->data->options)
+            );
+
+            $this->module->logger->info("Command $name successfully registered!", array_filter([
+                'class' => get_class($command),
+                'description' => $description,
+                'reason' => $saveReason,
+                'cached' => $cacheCommand,
+                'guild' => $guild ?? null,
+                'global' => $guild == null,
+                'saved' => $saved
+            ], fn ($v) => !is_null($v)));
+            return $registered;
+        }
+        return null;
     }
 
-    public function getListeners(): array
+    public function unregisterAllCommands()
     {
-        return $this->listeners;
+        foreach ($this->registeredCommands as $guild => $commandNames) {
+            $guild != 'global' or $guild = null;
+            foreach ($commandNames as $name)
+                self::unregisterCommand($this->modularDiscord, $name, $guild, logger: $this->module->logger);
+        }
+    }
+
+    public static function unregisterCommand(ModularDiscord $modularDiscord, string $name, ?string $guild = null, ?string $reason = null, LoggerInterface $logger = null)
+    {
+        $discord = $modularDiscord->discord;
+        $commands = ($guild != null ? $discord->guilds[$guild] : $discord->application)->commands;
+        $logger = ($logger ?? $modularDiscord->logger);
+        // TODO find a way to get command by name
+        $commands->delete($name, $reason)->done(fn () => $logger->info("Unregistered $name command successfully", array_filter([
+            'guild' => $guild,
+            'global' => $guild == null,
+            'reason' => $reason
+        ], fn ($v) => !is_null($v))));
+        $modularDiscord->cache->cache(null, Cache::COMMANDS, [$name], true);
     }
 }
