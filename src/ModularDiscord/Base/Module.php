@@ -31,7 +31,7 @@ class Module
         $this->modularDiscord = $modularDiscord;
         $this->path = $path;
         $this->logger = $modularDiscord->createLogger('Module#'.$name);
-        $this->registry = new Registry($modularDiscord, $this);
+        $this->registry = new Registry($this);
     }
 
     public function onEnable() {}
@@ -39,6 +39,8 @@ class Module
     public function onClose() {}
     public function onDiscordInit(Discord $discord) {}
     public function onDiscordReady(Discord $discord) {}
+
+    public function loadLocalFiles() {}
 
     public final function isFirstTimeLoad(): bool
     {
