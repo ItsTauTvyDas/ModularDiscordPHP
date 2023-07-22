@@ -41,6 +41,7 @@ class Module
     public function onAccessorReady(Accessor $accessor) {}
     public function onDiscordInit(Discord $discord) {}
     public function onDiscordReady(Discord $discord) {}
+    public function consoleCall() {}
 
     /**
      * Executed once on first load.

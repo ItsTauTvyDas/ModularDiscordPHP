@@ -86,7 +86,12 @@ class ModularDiscord
         return $this->accessors[$name] ?? null;
     }
 
-    private function handleException(Throwable $throwable, string $message, ?LoggerInterface $logger = null)
+    public function module(string $name): ?Module
+    {
+        return $this->modules[$name] ?? null;
+    }
+
+    public function handleException(Throwable $throwable, string $message, ?LoggerInterface $logger = null)
     {
         $logger = $logger ?? $this->logger;
         $this->logger->error('Caught ' . get_class($throwable) . ": $message: " . $throwable->getMessage());
@@ -157,13 +162,15 @@ class ModularDiscord
     /**
      * Reload a module (disable and enable again).
      */
-    public function reloadModule(string $name)
+    public function reloadModule(string $name): bool
     {
         $module = $this->modules[$name] ?? null;
         if ($module != null) {
             $module->setEnabled(false);
             $module->setEnabled(true);
+            return true;
         }
+        return false;
     }
 
     private function loadModule(string $path, string $name, string $displayName = null, ?Registry $registry = null): ?Module

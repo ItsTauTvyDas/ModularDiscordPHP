@@ -97,7 +97,7 @@ final class Registry
         $guild = $guild ?? $command->getGuild();
 
         if ($guild != null and !$discord->guilds->has($guild)) {
-            $this->module->logger->error("Couldn't register '$name' command. Guild $guild does not exist!");
+            $this->module->logger->error("Couldn't register '$name' command as guild with an ID of '$guild' does not exist!");
             return null;
         }
 
@@ -151,7 +151,7 @@ final class Registry
         $discord = $modularDiscord->discord;
         $commands = ($guild != null ? $discord->guilds[$guild] : $discord->application)->commands;
         $logger = ($logger ?? $modularDiscord->logger);
-        $commands->delete($id, $reason)->done(fn () => $logger->info("Unregistered $name command successfully", array_filter([
+        $commands->delete($id, $reason)->done(fn () => $logger->info("Unregistered '$name' command successfully", array_filter([
             'guild' => $guild,
             'global' => $guild == null,
             'reason' => $reason

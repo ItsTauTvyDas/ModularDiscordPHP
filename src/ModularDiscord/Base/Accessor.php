@@ -22,6 +22,8 @@ abstract class Accessor
     public function onDiscordReady(Discord $discord) {}
     public function onModuleReady(Module $module) {}
 
+    public function consoleCall() {}
+
     public abstract function load();
     public function close() {}
 }
