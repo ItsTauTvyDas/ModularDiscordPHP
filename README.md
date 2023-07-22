@@ -35,27 +35,3 @@ ModularDiscord::new()->loadAccessors()->loadModules()->initiateDiscord([
     // Do something before running discord bot client...
 })->run();
 ```
-
-You can also change [default settings](src/ModularDiscord/Settings.php#L19), even in different ways.
-```php
-// Using array
-$settings = [
-    'logger' => [
-        'debug' => true
-    ],
-    ...
-];
-
-// Or using as callable/closure, works as a builder!
-$settings = fn (ModularDiscord\Settings $s) => $s->debug(true)->modulesFolder('plugins')->...;
-
-// Or using settings instance itself.
-$settings = new ModularDiscord\Settings([ // This array is optional!
-    'logger' => [
-        'debug' => true
-    ]
-])->consoleHandleCtrlC(false)->...;
-
-// And finally...
-$bot = ModularDiscord::new($settings);
-```
