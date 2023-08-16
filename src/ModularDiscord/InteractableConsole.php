@@ -13,19 +13,21 @@ class InteractableConsole
     private static bool $loaded = false;
     private static mixed $stdin = null;
 
-    public static function registerCommand(string $name, callable $function)
+    public static function registerCommand(string $name, callable $function): void
     {
         $registry[$name] = $function;
     }
 
-    public static function listenForCommands(ModularDiscord $modDiscord)
+    public static function listenForCommands(ModularDiscord $modDiscord): void
     {
         if (self::$loaded)
             return;
         self::$loaded = true;
         $discord = $modDiscord->discord;
-        if (self::isRunningWindows())
-            return $discord->getLogger()->warning("Failed to initialize console command listener due to 'stream_set_blocking' function not being supported on Windows.");
+        if (self::isRunningWindows()) {
+            $discord->getLogger()->warning("Failed to initialize console command listener due to 'stream_set_blocking' function not being supported on Windows.");
+            return;
+        }
 
         $discord->getLogger()->info('Listening for console commands...');
         self::$stdin = fopen(STDIN, 'r');
@@ -40,8 +42,10 @@ class InteractableConsole
                     if (count($split) > 1)
                         $args = array_slice($split, 1);
                     $callable = self::$registry[$name] ?? null;
-                    if ($callable == null)
-                        return self::handleDefaultCommand($modDiscord, $name, $args);
+                    if ($callable == null) {
+                        self::handleDefaultCommand($modDiscord, $name, $args);
+                        return;
+                    }
                     $callable($modDiscord, $name, $args);
                 } catch (Exception | Error $ex) {
                     $discord->getLogger()->error("Error handling console command: {$ex->getMessage()}", [
@@ -55,7 +59,7 @@ class InteractableConsole
         $discord->getLogger()->error('stream_set_blocking(...) failed: console input handler not initialized.');
     }
 
-    public static function closeConsoleStream()
+    public static function closeConsoleStream(): void
     {
         if (self::$stdin != null)
             fclose(self::$stdin);
@@ -80,15 +84,15 @@ class InteractableConsole
         });
     }
 
-    private static function handleDefaultCommand(ModularDiscord $modDiscord, string $name, array $args)
+    private static function handleDefaultCommand(ModularDiscord $modDiscord, string $name, array $args): void
     {
         $log = $modDiscord->discord->getLogger();
         switch ($name) {
             case 'stop':
             case 'close':
             case 'end':
-                return$modDiscord->close();
-                return;
+                $modDiscord->close();
+            break;
             case 'help':
                 $log->info('fetch');
                 $log->info('uptime');
@@ -98,44 +102,54 @@ class InteractableConsole
                 $log->info('callaccessor <name>');
                 $log->info('callmodule <name>');
                 $log->info('refreshmodule/rfmod <name>');
-                return;
+                break;
             case 'refreshmodule':
             case 'rfmod':
                 if (isset($args[0])) {
                     if (!$modDiscord->refreshModuleFile($args[0], $newNameRef)) {
                         if (!isset($newNameRef))
-                            return $log->error("Module '{$args[0]}' doesn't exist!");
-                        return;
+                            $log->error("Module '{$args[0]}' doesn't exist!");
+                        break;
                     }
-                    return $log->info("Module '{$args[0]}' successfully refreshed/reloaded!");
+                    $log->info("Module '{$args[0]}' successfully refreshed/reloaded!");
+                    break;
                 }
-                return $log->error('Missing args');
+                $log->error('Missing args');
+            break;
             case 'reloadmodule':
             case 'rlmod':
                 if (isset($args[0])) {
-                    if ($modDiscord->reloadModule($args[0]))
-                        return $log->info("Module '{$args[0]}' reloaded successfully.");
-                    return $log->error("Module '{$args[0]}' doesn't exist!");
+                    if ($modDiscord->reloadModule($args[0])) {
+                        $log->info("Module '{$args[0]}' reloaded successfully.");
+                        break;
+                    }
+                    $log->error("Module '{$args[0]}' doesn't exist!");
+                    break;
                 }
-                return $log->error('Missing args');
+                $log->error('Missing args');
+                break;
             case 'callaccessor':
             case 'callmodule':
                 $type = substr($name, 4);
                 if (isset($args[0])) {
                     if (($mod = $modDiscord->$type($args[0])) != null) {
                         $function = $args[1] ?? 'consoleCall';
-                        if (!method_exists($mod, $function))
-                            return $log->error("Function '$function' doesn't exist!");
+                        if (!method_exists($mod, $function)) {
+                            $log->error("Function '$function' doesn't exist!");
+                            break;
+                        }
                         try {
-                        return $mod->$function();
+                            $mod->$function();
                         } catch (Exception | Error | ParseError $e) {
                             $modDiscord->handleException($e, "Got an exception while invoking \${$type}->{$function}() !");
                         }
-                        return;
+                        break;
                     }
-                    return $log->info(ucfirst($type) . " '{$args[0]}' doesn't exist!");
+                    $log->info(ucfirst($type) . " '{$args[0]}' doesn't exist!");
+                    break;
                 }
-                return $log->error('Missing args');
+                $log->error('Missing args');
+                break;
             case 'callmodule':
             case 'fetch':
                 switch ($args[0] ?? null) {
@@ -143,11 +157,11 @@ class InteractableConsole
                         $log->info('> fetch command <name/id>:<[name/id]> <[method/field]/print/methods/fields>');
                         $log->info('> fetch <user/guild/member> <[value]> <[method/field]/print/methods/fields>');
                 }
-                return;
+                break;
             case 'forceexit':
-                return exit(-1);
+                exit(-1);
             default:
-                return $log->error("Invalid command: $name");
+                $log->error("Invalid command: $name");
         }
     }
 

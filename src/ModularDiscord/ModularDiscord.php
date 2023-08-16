@@ -4,6 +4,7 @@ namespace ModularDiscord;
 
 use DateTimeZone;
 use Discord\Discord;
+use Discord\Exceptions\IntentException;
 use Error;
 use Exception;
 use ModularDiscord\Base\Accessor;
@@ -30,7 +31,8 @@ class ModularDiscord
 
     /**
      * Makes a new instance of ModularDiscord
-     * @param SettingsBuilder|array|false $settings (Optional) Settings.
+     * @param Settings|array|callable|null $settings (Optional) Settings.
+     * @return ModularDiscord
      */
     public static function new(Settings|array|callable|null $settings = null): ModularDiscord
     {
@@ -45,7 +47,7 @@ class ModularDiscord
         else
             $i->settings = $settings;
 
-        foreach (array_values($i->settings['folders']) as $folder)
+        foreach ($i->settings['folders'] as $folder)
             @mkdir($folder);
         $i->logger = $i->createLogger('ModularDiscord');
         $i->cache = new Cache($i->settings['cache']['filename']);
@@ -91,11 +93,11 @@ class ModularDiscord
         return $this->modules[$name] ?? null;
     }
 
-    public function handleException(Throwable $throwable, string $message, ?LoggerInterface $logger = null)
+    public function handleException(Throwable $throwable, string $message, ?LoggerInterface $logger = null): void
     {
         $logger = $logger ?? $this->logger;
-        $this->logger->error('Caught ' . get_class($throwable) . ": $message: " . $throwable->getMessage());
-        $this->logger->error($throwable->getTraceAsString());
+        $logger->error('Caught ' . get_class($throwable) . ": $message: " . $throwable->getMessage());
+        $logger->error($throwable->getTraceAsString());
     }
 
     /**
@@ -173,7 +175,7 @@ class ModularDiscord
         return false;
     }
 
-    private function loadModule(string $path, string $name, string $displayName = null, ?Registry $registry = null): ?Module
+    private function loadModule(string $path, string $name, string $displayName = null, ?Registry $registry = null): void
     {
         $firstLoad = $displayName == null;
         if ($displayName == null)
@@ -191,10 +193,10 @@ class ModularDiscord
                 $instance->onDiscordReady($this->discord);
             $this->executeGlobalAccessorFunction('onModuleReady', [$instance]);
             $this->modules[$displayName] = $instance;
-            return $instance;
+            return;
         } catch (Exception $ex) {
             $this->handleException($ex, "Failed to load $displayName module");
-            return null;
+            return;
         }
     }
 
@@ -223,9 +225,9 @@ class ModularDiscord
     /**
      * Executes function for every module (if it exists).
      */
-    public function executeGlobalModuleFunction(string $function, array $params = [])
+    public function executeGlobalModuleFunction(string $function, array $params = []): void
     {
-        foreach (array_values($this->modules) as $module)
+        foreach ($this->modules as $module)
             if (method_exists($module, $function) and $module->isEnabled())
                 $module->$function(...$params);
     }
@@ -233,9 +235,9 @@ class ModularDiscord
     /**
      * Executes function for every accessor (if it exists).
      */
-    public function executeGlobalAccessorFunction(string $function, array $params = [])
+    public function executeGlobalAccessorFunction(string $function, array $params = []): void
     {
-        foreach (array_values($this->accessors) as $accessor)
+        foreach ($this->accessors as $accessor)
             if (method_exists($accessor, $function))
                 $accessor->$function(...$params);
     }
@@ -243,7 +245,7 @@ class ModularDiscord
     /**
      * Disable all modules and close discord instance.
      */
-    public function close()
+    public function close(): void
     {
         $this->closing = true;
         if (isset($this->discord))
@@ -261,8 +263,9 @@ class ModularDiscord
     /**
      * Initiate discord bot client and run it.
      * @param array $options Discord bot's options.
-     * @param Discord $discord Discord reference.
+     * @param callable|null $callable Callable function with Discord parameter.
      * @return self
+     * @throws IntentException
      */
     public function initiateDiscord(array $options, callable|null $callable = null): self
     {
@@ -289,7 +292,7 @@ class ModularDiscord
      * Run discord loop.
      * Any code after this function may not get executed.
      */
-    public function run()
+    public function run(): void
     {
         $this->discord->run();
         InteractableConsole::closeConsoleStream();

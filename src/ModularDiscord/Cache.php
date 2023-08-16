@@ -16,7 +16,7 @@ class Cache
         $this->source = $this->readFile();
     }
 
-    public function cache(?string $category, string $key, $value, bool $removeFromArray = false)
+    public function cache(?string $category, string $key, $value, bool $removeFromArray = false): void
     {
         $array = &$this->source;
         if ($category != null) {
@@ -38,7 +38,7 @@ class Cache
                     if (count($value) == 0)
                         return;
                     foreach ($value as $v)
-                        array_push($array[$key], $v);
+                        $array[$key][] = $v;
                 } else
                     $array[$key] = $value;
             }
@@ -52,7 +52,7 @@ class Cache
         return json_decode(file_get_contents($this->file), true);
     }
 
-    private function saveToFile(array $source)
+    private function saveToFile(array $source): void
     {
         file_put_contents($this->file, json_encode($source, JSON_PRETTY_PRINT));
     }

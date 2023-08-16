@@ -11,6 +11,7 @@ use ModularDiscord\Base\Listener;
 use ModularDiscord\Base\Module;
 use Psr\Log\LoggerInterface;
 use ReflectionClass;
+use ReflectionException;
 use ReflectionMethod;
 
 final class Registry
@@ -32,7 +33,10 @@ final class Registry
         $this->module = $module;
     }
 
-    public function registerListener(Listener $listener, array &$listeners = [])
+    /**
+     * @throws ReflectionException
+     */
+    public function registerListener(Listener $listener, array &$listeners = []): void
     {
         $methods = get_class_methods($listener);
 
@@ -49,7 +53,6 @@ final class Registry
                     if ($this->module->cacheListeners)
                         $this->listeners[$event][] = $closure;
                     $count++;
-                    continue;
                 }
             }
 
@@ -63,7 +66,7 @@ final class Registry
      * Unregisters cached listeners if there's any.
      * Note: This gets called when disabling module.
      */
-    public function removeDiscordListeners()
+    public function removeDiscordListeners(): void
     {
         $count = 0;
         foreach ($this->listeners as $key => $value) {
@@ -137,7 +140,7 @@ final class Registry
         return null;
     }
 
-    public function unregisterAllCommands()
+    public function unregisterAllCommands(): void
     {
         foreach ($this->registeredCommands as $guild => $commands) {
             $guild != 'global' or $guild = null;
@@ -146,7 +149,7 @@ final class Registry
         }
     }
 
-    public static function unregisterCommand(ModularDiscord $modularDiscord, string $name, string $id, ?string $guild = null, ?string $reason = null, LoggerInterface $logger = null)
+    public static function unregisterCommand(ModularDiscord $modularDiscord, string $name, string $id, ?string $guild = null, ?string $reason = null, LoggerInterface $logger = null): void
     {
         $discord = $modularDiscord->discord;
         $commands = ($guild != null ? $discord->guilds[$guild] : $discord->application)->commands;
