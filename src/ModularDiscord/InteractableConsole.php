@@ -150,7 +150,6 @@ class InteractableConsole
                 }
                 $log->error('Missing args');
                 break;
-            case 'callmodule':
             case 'fetch':
                 switch ($args[0] ?? null) {
                     default:
