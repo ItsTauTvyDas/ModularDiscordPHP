@@ -3,6 +3,7 @@
 namespace ModularDiscord\Base;
 
 use Discord\Discord;
+use Exception;
 use ModularDiscord\Base\Accessor;
 use ModularDiscord\ModularDiscord;
 use ModularDiscord\Registry;
@@ -26,6 +27,9 @@ class Module
      */
     public bool $cacheListeners = false;
 
+    /**
+     * @throws Exception Thrown if failed to create logger.
+     */
     public function __construct(string $name, string $path, ModularDiscord $modularDiscord)
     {
         $this->name = $name;
@@ -41,19 +45,29 @@ class Module
     public function onAccessorReady(Accessor $accessor) {}
     public function onDiscordInit(Discord $discord) {}
     public function onDiscordReady(Discord $discord) {}
-    public function consoleCall() {}
+    public function consoleCall(string ...$params) {}
 
     /**
-     * Executed once on first load.
+     * Executed once on first load (after class initialization).
      */
     public function loadLocalFiles() {}
 
+    /**
+     * Only works in onEnable() and ($callReadyOnEnable is true) onDiscordReady() methods.
+     * @see Module::onEnable()
+     * @see Module::onDiscordReady()
+     * @see Module::$callReadyOnEnable
+     */
     public final function isFirstTimeLoad(): bool
     {
         return !isset($this->modularDiscord->getModules()[$this->name]);
     }
 
-    public final function setEnabled(bool $bool)
+    /**
+     * Note that if false, discord listeners are removed.
+     * @param bool $bool
+     */
+    public final function setEnabled(bool $bool): void
     {
         $this->disabled = !$bool;
         if ($bool) {

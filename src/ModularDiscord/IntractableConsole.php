@@ -7,15 +7,19 @@ use Exception;
 use ParseError;
 use Seld\Signal\SignalHandler;
 
-class InteractableConsole
+class IntractableConsole
 {
     private static array $registry = [];
     private static bool $loaded = false;
     private static mixed $stdin = null;
 
+    /**
+     * @param string $name Name of the command
+     * @param callable $function Executed on command call,
+     */
     public static function registerCommand(string $name, callable $function): void
     {
-        $registry[$name] = $function;
+        self::$registry[$name] = $function;
     }
 
     public static function listenForCommands(ModularDiscord $modDiscord): void
@@ -24,6 +28,7 @@ class InteractableConsole
             return;
         self::$loaded = true;
         $discord = $modDiscord->discord;
+
         if (self::isRunningWindows()) {
             $discord->getLogger()->warning("Failed to initialize console command listener due to 'stream_set_blocking' function not being supported on Windows.");
             return;
@@ -42,11 +47,8 @@ class InteractableConsole
                     if (count($split) > 1)
                         $args = array_slice($split, 1);
                     $callable = self::$registry[$name] ?? null;
-                    if ($callable == null) {
-                        self::handleDefaultCommand($modDiscord, $name, $args);
-                        return;
-                    }
-                    $callable($modDiscord, $name, $args);
+                    if (!self::handleDefaultCommand($modDiscord, $name, $args))
+                        $callable($modDiscord, $name, $args);
                 } catch (Exception | Error $ex) {
                     $discord->getLogger()->error("Error handling console command: {$ex->getMessage()}", [
                         'line' => $ex->getLine(),
@@ -68,7 +70,7 @@ class InteractableConsole
     /**
      * CTRL + C handler.
      */
-    public static function handleSignals(ModularDiscord $modDiscord)
+    public static function handleSignals(ModularDiscord $modDiscord): void
     {
         $signal = SignalHandler::create([SignalHandler::SIGINT]); //Listen for CTRL + C
 
@@ -84,7 +86,7 @@ class InteractableConsole
         });
     }
 
-    private static function handleDefaultCommand(ModularDiscord $modDiscord, string $name, array $args): void
+    private static function handleDefaultCommand(ModularDiscord $modDiscord, string $name, array $args): bool
     {
         $log = $modDiscord->discord->getLogger();
         switch ($name) {
@@ -92,7 +94,7 @@ class InteractableConsole
             case 'close':
             case 'end':
                 $modDiscord->close();
-            break;
+                break;
             case 'help':
                 $log->info('fetch');
                 $log->info('uptime');
@@ -108,22 +110,22 @@ class InteractableConsole
                 if (isset($args[0])) {
                     if (!$modDiscord->refreshModuleFile($args[0], $newNameRef)) {
                         if (!isset($newNameRef))
-                            $log->error("Module '{$args[0]}' doesn't exist!");
+                            $log->error("Module '$args[0]' doesn't exist!");
                         break;
                     }
-                    $log->info("Module '{$args[0]}' successfully refreshed/reloaded!");
+                    $log->info("Module '$args[0]' successfully refreshed/reloaded!");
                     break;
                 }
                 $log->error('Missing args');
-            break;
+                break;
             case 'reloadmodule':
             case 'rlmod':
                 if (isset($args[0])) {
                     if ($modDiscord->reloadModule($args[0])) {
-                        $log->info("Module '{$args[0]}' reloaded successfully.");
+                        $log->info("Module '$args[0]' reloaded successfully.");
                         break;
                     }
-                    $log->error("Module '{$args[0]}' doesn't exist!");
+                    $log->error("Module '$args[0]' doesn't exist!");
                     break;
                 }
                 $log->error('Missing args');
@@ -139,13 +141,14 @@ class InteractableConsole
                             break;
                         }
                         try {
-                            $mod->$function();
+                            $array = array_slice($args, 2);
+                            $mod->$function($array);
                         } catch (Exception | Error | ParseError $e) {
-                            $modDiscord->handleException($e, "Got an exception while invoking \${$type}->{$function}() !");
+                            $modDiscord->handleException($e, "Got an exception while invoking \$$type->$function() !");
                         }
                         break;
                     }
-                    $log->info(ucfirst($type) . " '{$args[0]}' doesn't exist!");
+                    $log->info(ucfirst($type) . " '$args[0]' doesn't exist!");
                     break;
                 }
                 $log->error('Missing args');
@@ -157,11 +160,13 @@ class InteractableConsole
                         $log->info('> fetch <user/guild/member> <[value]> <[method/field]/print/methods/fields>');
                 }
                 break;
-            case 'forceexit':
+            case 'die':
                 exit(-1);
             default:
                 $log->error("Invalid command: $name");
+                return false;
         }
+        return true;
     }
 
     private static function isRunningWindows(): bool

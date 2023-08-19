@@ -6,6 +6,7 @@ use Closure;
 use Discord\Helpers\RegisteredCommand;
 use Discord\Parts\Interactions\Command\Command;
 use Discord\Parts\Interactions\Interaction;
+use Exception;
 use ModularDiscord\Base\AbstractCommand;
 use ModularDiscord\Base\Listener;
 use ModularDiscord\Base\Module;
@@ -57,8 +58,8 @@ final class Registry
             }
 
         $this->module->logger->info("Registered $count listener" . ($count > 1 ? 's' : ''), [
-            'listeners' => array_keys($listeners),
-            'class' => get_class($listener)
+            'class' => get_class($listener),
+            'listeners' => array_keys($listeners)
         ]);
     }
 
@@ -76,7 +77,7 @@ final class Registry
             }
         }
         if ($count)
-            $this->module->logger->info("Unegistered $count listener" . ($count > 1 ? 's' : ''), array_keys($this->listeners));
+            $this->module->logger->info("Unregistered $count listener" . ($count > 1 ? 's' : ''), array_keys($this->listeners));
     }
 
     public function isCommandCached(string $name): bool
@@ -84,6 +85,9 @@ final class Registry
         return $this->modularDiscord->cache->isCached(Cache::COMMANDS, $name);
     }
 
+    /**
+     * @throws Exception Thrown if failed to save discord command.
+     */
     public function registerCommand(AbstractCommand $command, ?string $name = null, ?string $description = null, ?string $guild = null, bool $cacheCommand = true, ?string $saveReason = null): ?RegisteredCommand
     {
         $builder = $command->onCreate();
@@ -126,7 +130,7 @@ final class Registry
                 fn (Interaction $i) => $command->onAutoComplete($i, $i->data->options)
             );
 
-            $this->module->logger->info("Command $name successfully registered!", array_filter([
+            $this->module->logger->info("Command '$name' successfully registered!", array_filter([
                 'class' => get_class($command),
                 'description' => $description,
                 'reason' => $saveReason,
@@ -144,11 +148,19 @@ final class Registry
     {
         foreach ($this->registeredCommands as $guild => $commands) {
             $guild != 'global' or $guild = null;
-            foreach ($commands as $name => $id)
-                self::unregisterCommand($this->modularDiscord, $name, $id, $guild, logger: $this->module->logger);
+            foreach ($commands as $name => $id) {
+                try {
+                    self::unregisterCommand($this->modularDiscord, $name, $id, $guild, logger: $this->module->logger);
+                } catch (Exception $ex) {
+                    $this->modularDiscord->logger->info("Failed to delete $name command: {$ex->getMessage()}". ['id' => $id, 'guild_id' => $guild]);
+                }
+            }
         }
     }
 
+    /**
+     * @throws Exception Thrown if failed to delete command.
+     */
     public static function unregisterCommand(ModularDiscord $modularDiscord, string $name, string $id, ?string $guild = null, ?string $reason = null, LoggerInterface $logger = null): void
     {
         $discord = $modularDiscord->discord;

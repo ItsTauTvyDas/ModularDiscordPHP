@@ -28,11 +28,13 @@ class ModularDiscord
     private array $accessors = [];
 
     private bool $closing = false;
+    private bool $readyCalled = false;
 
     /**
      * Makes a new instance of ModularDiscord
      * @param Settings|array|callable|null $settings (Optional) Settings.
      * @return ModularDiscord
+     * @throws Exception Thrown if failed to create logger.
      */
     public static function new(Settings|array|callable|null $settings = null): ModularDiscord
     {
@@ -54,6 +56,9 @@ class ModularDiscord
         return $i;
     }
 
+    /**
+     * @throws Exception Thrown if DateTimeZone fails.
+     */
     public function createLogger(string $name): LoggerInterface
     {
         $logger = $this->settings['logger'];
@@ -83,6 +88,10 @@ class ModularDiscord
         return $this->accessors;
     }
 
+    /**
+     * @param string $name
+     * @return Accessor|null
+     */
     public function accessor(string $name): ?Accessor
     {
         return $this->accessors[$name] ?? null;
@@ -102,7 +111,7 @@ class ModularDiscord
 
     /**
      * Load accessors.
-     * So called "accessors" are instances that can be accessed by every module.
+     * So-called "accessors" are instances that can be accessed by every module.
      * Useful if you have some kind of API with one instance that you need to access in multiple modules.
      * @return self
      */
@@ -183,8 +192,7 @@ class ModularDiscord
 
         try {
             $instance = new $name($displayName, $path, $this);
-            if ($firstLoad)
-                $instance->loadLocalFiles();
+            $instance->loadLocalFiles();
             if ($registry != null)
                 $instance->registry->registeredCommands = $registry->registeredCommands;
             $instance->onEnable(true);
@@ -209,13 +217,12 @@ class ModularDiscord
         $this->logger->info('Loading modules...');
         foreach (glob($this->settings['folders']['modules'] . '/*/module.php') as $moduleFile) {
             require_once $moduleFile;
-            $name = pathinfo($moduleFile, PATHINFO_DIRNAME);
-            $name = substr($name, strrpos($name, '/') + 1);
-            if (class_exists($name)) {
-                $this->loadModule($moduleFile, $name);
+            $moduleName = pathinfo(pathinfo($moduleFile, PATHINFO_DIRNAME), PATHINFO_BASENAME);
+            if (class_exists($moduleName)) {
+                $this->loadModule($moduleFile, $moduleName);
                 continue;
             }
-            $this->logger->warning("Failed to load $moduleFile module: Class $moduleFile does not exist!", [
+            $this->logger->warning("Failed to load $moduleName module: Class ($moduleName) does not exist!", [
                 'file' => $moduleFile
             ]);
         }
@@ -262,10 +269,11 @@ class ModularDiscord
 
     /**
      * Initiate discord bot client and run it.
-     * @param array $options Discord bot's options.
+     * @param array $options Discord bot options.
      * @param callable|null $callable Callable function with Discord parameter.
      * @return self
      * @throws IntentException
+     * @throws Exception Thrown if failed to create logger.
      */
     public function initiateDiscord(array $options, callable|null $callable = null): self
     {
@@ -278,12 +286,14 @@ class ModularDiscord
         $discord->on('ready', function (Discord $discord) {
             $this->executeGlobalModuleFunction('onDiscordReady', [$discord]);
             $this->executeGlobalAccessorFunction('onDiscordReady', [$discord]);
-        });
 
-        if ($this->settings['console']['commands'])
-            IntractableConsole::listenForCommands($this);
-        if ($this->settings['console']['handle-ctrl-c'])
-            IntractableConsole::handleSignals($this);
+            if ($this->settings['console']['commands'])
+                IntractableConsole::listenForCommands($this);
+            if ($this->settings['console']['handle-ctrl-c'])
+                IntractableConsole::handleSignals($this);
+
+            $this->readyCalled = true;
+        });
 
         return $this;
     }
@@ -295,10 +305,12 @@ class ModularDiscord
     public function run(): void
     {
         $this->discord->run();
-        IntractableConsole::closeConsoleStream();
-        $this->executeGlobalModuleFunction('onDisable');
-        $this->executeGlobalModuleFunction('onClose');
-        $this->executeGlobalAccessorFunction('close');
+        if ($this->readyCalled) {
+            IntractableConsole::closeConsoleStream();
+            $this->executeGlobalModuleFunction('onDisable');
+            $this->executeGlobalModuleFunction('onClose');
+            $this->executeGlobalAccessorFunction('close');
+        }
         $this->logger->info('Fully closed!');
     }
 }
