@@ -42,3 +42,9 @@ ModularDiscord::new()->loadAccessors()->loadModules()->initiateDiscord([
 Accessors do not require to have their own folder, but if they do have, the main file should be called `accessor.php` with a class name that is the same as folder's name.
 
 Depending on other module is possible but just note that the modules get loaded alphabetically.
+
+### Running
+Very basic command
+```
+php bot.php
+```
