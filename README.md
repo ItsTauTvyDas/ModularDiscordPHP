@@ -5,6 +5,8 @@
 
 This is an extension for <a about = "_blank" href = "https://github.com/discord-php/DiscordPHP">DiscordPHP</a> which allows user to make modules that could control listeners or commands and this makes the code more organized. I have made something like this long ago but I just wanted to rewrite it because the code was horrible.
 
+I made this so I could make bots easier and so I decided to public it.
+
 ## Features
 - **Console/terminal support** - an ability to run commands (and register your own ones) through console! For now Windows are not supported! Not sure about other systems, I only tested this on Windows and Linux.
 - **Modules** - the core thingy. They can also be disabled and enabled if needed.
@@ -35,3 +37,8 @@ ModularDiscord::new()->loadAccessors()->loadModules()->initiateDiscord([
     // Do something before running discord bot client...
 })->run();
 ```
+
+### About accessors and modules
+Accessors do not require to have their own folder, but if they do have, the main file should be called `accessor.php` with a class name that is the same as folder's name.
+
+Depending on other module is possible but just note that the modules get loaded alphabetically.
