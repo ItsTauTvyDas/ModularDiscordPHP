@@ -22,6 +22,8 @@ abstract class AbstractCommand
 
     public abstract function onCreate(): CommandBuilder;
     public abstract function onCommand(Interaction $interaction, OptionRepository $args);
-    public function onAutoComplete(Interaction $interaction, OptionRepository $args): array {return []; }
+    public function onAutoComplete(Interaction $interaction, OptionRepository $args): array {
+        return [];
+    }
     public function getGuild(): ?string { return null; }
 }
