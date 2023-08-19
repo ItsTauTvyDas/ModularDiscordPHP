@@ -281,9 +281,9 @@ class ModularDiscord
         });
 
         if ($this->settings['console']['commands'])
-            InteractableConsole::listenForCommands($this);
+            IntractableConsole::listenForCommands($this);
         if ($this->settings['console']['handle-ctrl-c'])
-            InteractableConsole::handleSignals($this);
+            IntractableConsole::handleSignals($this);
 
         return $this;
     }
@@ -295,7 +295,7 @@ class ModularDiscord
     public function run(): void
     {
         $this->discord->run();
-        InteractableConsole::closeConsoleStream();
+        IntractableConsole::closeConsoleStream();
         $this->executeGlobalModuleFunction('onDisable');
         $this->executeGlobalModuleFunction('onClose');
         $this->executeGlobalAccessorFunction('close');
