@@ -1,4 +1,5 @@
 test
 composer.lock
 vendor
-example
+.idea
+example/cache.json
