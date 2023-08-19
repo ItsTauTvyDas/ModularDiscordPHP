@@ -152,7 +152,7 @@ final class Registry
                 try {
                     self::unregisterCommand($this->modularDiscord, $name, $id, $guild, logger: $this->module->logger);
                 } catch (Exception $ex) {
-                    $this->modularDiscord->logger->info("Failed to delete $name command: {$ex->getMessage()}". ['id' => $id, 'guild_id' => $guild]);
+                    $this->modularDiscord->logger->info("Failed to delete $name command: {$ex->getMessage()}", ['id' => $id, 'guild_id' => $guild]);
                 }
             }
         }
