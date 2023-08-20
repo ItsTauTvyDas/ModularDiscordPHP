@@ -47,7 +47,7 @@ class ModularDiscord
         elseif ($settings instanceof Settings)
             $i->settings = $settings->settings;
         else
-            $i->settings = $settings;
+            $i->settings = (new Settings($settings))->settings;
 
         foreach ($i->settings['folders'] as $folder)
             @mkdir($folder);
