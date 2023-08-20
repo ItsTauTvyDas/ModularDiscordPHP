@@ -27,18 +27,17 @@ class IntractableConsole
         if (self::$loaded)
             return;
         self::$loaded = true;
-        $discord = $modDiscord->discord;
 
         if (self::isRunningWindows()) {
-            $discord->getLogger()->warning("Failed to initialize console command listener due to 'stream_set_blocking' function not being supported on Windows.");
+            $modDiscord->logger->warning("Failed to initialize console command listener due to 'stream_set_blocking' function not being supported on Windows.");
             return;
         }
 
         try {
-            $discord->getLogger()->info('Listening for console commands...');
+            $modDiscord->logger->info('Listening for console commands...');
             self::$stdin = STDIN;
             if (stream_set_blocking(self::$stdin, false)) {
-                $discord->getLoop()->addPeriodicTimer(1, function () use ($modDiscord, $discord) {
+                $modDiscord->discord->getLoop()->addPeriodicTimer(1, function () use ($modDiscord) {
                     try {
                         $line = fgets(self::$stdin);
                         if (empty($line))
@@ -49,7 +48,7 @@ class IntractableConsole
                         $args = array_slice($exploded, 1);
                         self::handleCommand($modDiscord, $name, $args);
                     } catch (Exception|Error $ex) {
-                        $discord->getLogger()->error("Error handling console command: {$ex->getMessage()}", [
+                        $modDiscord->logger->error("Error handling console command: {$ex->getMessage()}", [
                             'line' => $ex->getLine(),
                             'file' => $ex->getFile()
                         ]);
@@ -57,9 +56,9 @@ class IntractableConsole
                 });
                 return;
             }
-            $discord->getLogger()->error('stream_set_blocking(...) failed: console input handler not initialized.');
+            $modDiscord->logger->error('stream_set_blocking(...) failed: console input handler not initialized.');
         } catch (Exception $e) {
-            $discord->getLogger()->error("Failed to initialize console command listener: {$e->getMessage()}", ['type' => get_class($e)]);
+            $modDiscord->logger->error("Failed to initialize console command listener: {$e->getMessage()}", ['type' => get_class($e)]);
         }
     }
 
