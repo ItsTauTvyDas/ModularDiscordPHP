@@ -43,11 +43,10 @@ class IntractableConsole
                         $line = fgets(self::$stdin);
                         if (empty($line))
                             return;
-                        $split = explode(' ', $line);
-                        $name = strtolower($split[0]);
-                        $args = [];
-                        if (count($split) > 1)
-                            $args = array_slice($split, 1);
+                        $line = trim(substr($line, 0, -1));
+                        $exploded = explode(' ', $line);
+                        $name = trim(strtolower(str_contains($line, " ") ? $exploded[0] : $line));
+                        $args = array_slice($exploded, 1);
                         self::handleCommand($modDiscord, $name, $args);
                     } catch (Exception|Error $ex) {
                         $discord->getLogger()->error("Error handling console command: {$ex->getMessage()}", [
