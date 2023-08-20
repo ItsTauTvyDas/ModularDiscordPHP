@@ -27,35 +27,39 @@ class IntractableConsole
         if (self::$loaded)
             return;
         self::$loaded = true;
-        $discord = $modDiscord->discord;
 
         if (self::isRunningWindows()) {
-            $discord->getLogger()->warning("Failed to initialize console command listener due to 'stream_set_blocking' function not being supported on Windows.");
+            $modDiscord->logger->warning("Failed to initialize console command listener due to 'stream_set_blocking' function not being supported on Windows.");
             return;
         }
 
-        $discord->getLogger()->info('Listening for console commands...');
-        if (stream_set_blocking(STDIN, false))
-        {
-            $discord->getLoop()->addPeriodicTimer(1, function () use ($modDiscord, $discord) {
-                try {
-                    $line = fgets(self::$stdin);
-                    $split = explode(' ', $line);
-                    $name = strtolower($split[0]);
-                    $args = [];
-                    if (count($split) > 1)
-                        $args = array_slice($split, 1);
-                    self::handleCommand($modDiscord, $name, $args);
-                } catch (Exception | Error $ex) {
-                    $discord->getLogger()->error("Error handling console command: {$ex->getMessage()}", [
-                        'line' => $ex->getLine(),
-                        'file' => $ex->getFile()
-                    ]);
-                }
-            });
-            return;
+        try {
+            $modDiscord->logger->info('Listening for console commands...');
+            self::$stdin = STDIN;
+            if (stream_set_blocking(self::$stdin, false)) {
+                $modDiscord->discord->getLoop()->addPeriodicTimer(1, function () use ($modDiscord) {
+                    try {
+                        $line = fgets(self::$stdin);
+                        if (empty($line))
+                            return;
+                        $line = trim(substr($line, 0, -1));
+                        $exploded = explode(' ', $line);
+                        $name = trim(strtolower(str_contains($line, " ") ? $exploded[0] : $line));
+                        $args = array_slice($exploded, 1);
+                        self::handleCommand($modDiscord, $name, $args);
+                    } catch (Exception|Error $ex) {
+                        $modDiscord->logger->error("Error handling console command: {$ex->getMessage()}", [
+                            'line' => $ex->getLine(),
+                            'file' => $ex->getFile()
+                        ]);
+                    }
+                });
+                return;
+            }
+            $modDiscord->logger->error('stream_set_blocking(...) failed: console input handler not initialized.');
+        } catch (Exception $e) {
+            $modDiscord->logger->error("Failed to initialize console command listener: {$e->getMessage()}", ['type' => get_class($e)]);
         }
-        $discord->getLogger()->error('stream_set_blocking(...) failed: console input handler not initialized.');
     }
 
     public static function closeConsoleStream(): void
