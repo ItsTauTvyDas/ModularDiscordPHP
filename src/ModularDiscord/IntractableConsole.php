@@ -36,7 +36,8 @@ class IntractableConsole
 
         try {
             $discord->getLogger()->info('Listening for console commands...');
-            if (stream_set_blocking(STDIN, false)) {
+            self::$stdin = STDIN;
+            if (stream_set_blocking(self::$stdin, false)) {
                 $discord->getLoop()->addPeriodicTimer(1, function () use ($modDiscord, $discord) {
                     try {
                         $line = fgets(self::$stdin);
