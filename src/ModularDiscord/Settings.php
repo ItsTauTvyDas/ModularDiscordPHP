@@ -54,7 +54,7 @@ class Settings
 
     public function loggerTimeZone(DateTimeZone $timeZone): self
     {
-        $this->settings['logger']['time-zone'] = $timeZone->getName();
+        $this->settings['logger']['timezone'] = $timeZone->getName();
         return $this;
     }
 
