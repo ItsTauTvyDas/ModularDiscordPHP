@@ -15,6 +15,9 @@ I made this so I could make bots easier and so I decided to public it.
 - **Accessors** - those so called "accessors" (I couldn't come up with anything better lol) are instances that every module can access. This is useful if you have an instance of one object and you want to access it in multiple modules.
 - **Reloadable modules!** - you can also completely reload a module, meaning file changes are applied. This basically disabled current module, gets its code, renames the class and loads it again. Sadly, there is no other way of unloading a class in PHP. This might be useful for testing! **Note**: Other external files don't get reloaded.
 
+## TODO
+- [ ] Finish and test console commands
+
 ## Getting Started
 
 ### Installing
