@@ -16,7 +16,7 @@ I made this so I could make bots easier and so I decided to public it.
 - **Reloadable modules!** - you can also completely reload a module, meaning file changes are applied. This basically disabled current module, gets its code, renames the class and loads it again. Sadly, there is no other way of unloading a class in PHP. This might be useful for testing! **Note**: Other external files don't get reloaded.
 
 ## TODO
-- [ ] Finish and test console commands
+- [ ] Finish console commands
 
 ## Getting Started
 
