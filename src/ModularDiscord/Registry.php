@@ -1,5 +1,7 @@
 <?php
 
+/** @noinspection PhpParamsInspection */
+
 namespace ModularDiscord;
 
 use Closure;
@@ -103,7 +105,7 @@ final class Registry
         $discordCommand = new Command($discord, $builder->toArray());
         $guild = $guild ?? $command->getGuild();
 
-        if ($guild != null and !$discord->guilds->has([$guild])) {
+        if ($guild != null and !$discord->guilds->has($guild)) {
             $this->module->logger->error("Couldn't register '$name' command as guild with an ID of '$guild' does not exist!");
             return null;
         }
