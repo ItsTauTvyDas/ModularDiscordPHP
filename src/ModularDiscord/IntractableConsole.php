@@ -41,6 +41,8 @@ class IntractableConsole
                 $discord->getLoop()->addPeriodicTimer(1, function () use ($modDiscord, $discord) {
                     try {
                         $line = fgets(self::$stdin);
+                        if (empty($line))
+                            return;
                         $split = explode(' ', $line);
                         $name = strtolower($split[0]);
                         $args = [];
