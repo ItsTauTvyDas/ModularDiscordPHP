@@ -35,8 +35,7 @@ class IntractableConsole
         }
 
         $discord->getLogger()->info('Listening for console commands...');
-        self::$stdin = fopen(STDIN, 'r');
-        if (stream_set_blocking(self::$stdin, false))
+        if (stream_set_blocking(STDIN, false))
         {
             $discord->getLoop()->addPeriodicTimer(1, function () use ($modDiscord, $discord) {
                 try {
@@ -46,9 +45,7 @@ class IntractableConsole
                     $args = [];
                     if (count($split) > 1)
                         $args = array_slice($split, 1);
-                    $callable = self::$registry[$name] ?? null;
-                    if (!self::handleDefaultCommand($modDiscord, $name, $args))
-                        $callable($modDiscord, $name, $args);
+                    self::handleCommand($modDiscord, $name, $args);
                 } catch (Exception | Error $ex) {
                     $discord->getLogger()->error("Error handling console command: {$ex->getMessage()}", [
                         'line' => $ex->getLine(),
@@ -86,7 +83,7 @@ class IntractableConsole
         });
     }
 
-    private static function handleDefaultCommand(ModularDiscord $modDiscord, string $name, array $args): bool
+    private static function handleCommand(ModularDiscord $modDiscord, string $name, array $args): void
     {
         $log = $modDiscord->discord->getLogger();
         switch ($name) {
@@ -163,10 +160,13 @@ class IntractableConsole
             case 'die':
                 exit(-1);
             default:
+                $callable = self::$registry[$name] ?? null;
+                if ($callable != null) {
+                    $callable($modDiscord, $name, $args);
+                    return;
+                }
                 $log->error("Invalid command: $name");
-                return false;
         }
-        return true;
     }
 
     private static function isRunningWindows(): bool
